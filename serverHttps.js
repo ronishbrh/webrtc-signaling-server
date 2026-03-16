@@ -169,7 +169,8 @@ setInterval(() => {
 // ---------- START SERVER ----------
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`WebSocket server running on port ${PORT}`);
-  console.log(`📍 TURN credentials endpoint: http${USE_SSL ? 's' : ''}://localhost:${PORT}/api/turn-credentials`);
+  const serverUrl = process.env.RENDER_EXTERNAL_URL || `http${USE_SSL ? 's' : ''}://localhost:${PORT}`;
+  console.log(`📍 TURN credentials endpoint: ${serverUrl}/api/turn-credentials`);
   console.log(`📍 Using Metered App: ${METERED_APP_DOMAIN}`);
   if (METERED_SECRET_KEY === 'YOUR_SECRET_KEY_HERE') {
     console.warn('⚠️  WARNING: METERED_SECRET_KEY not set! Update serverHttps.js or set environment variable.');
