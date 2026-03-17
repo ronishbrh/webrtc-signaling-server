@@ -9,8 +9,8 @@ const PORT = process.env.PORT || 8080;
 const USE_SSL = process.env.USE_SSL === "true";
 
 // ⭐ Your Metered App Details (from Metered dashboard)
-const METERED_APP_DOMAIN = 'webrtc-calling-app.metered.live';
-const METERED_SECRET_KEY = process.env.METERED_SECRET_KEY || '0aefbd8388ab2af062325deca7f100c38509';
+const METERED_APP_DOMAIN = 'webrtc_calling_app.metered.live';
+const METERED_SECRET_KEY = process.env.METERED_SECRET_KEY || 'd534ddd0a0cc115b19aaa0e5a7437231814a';
 
 let server;
 if (USE_SSL) {
