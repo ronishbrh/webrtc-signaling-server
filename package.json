@@ -7,6 +7,8 @@
     "start": "node serverHttps.js"
   },
   "dependencies": {
+    "crypto": "^1.0.1",
+    "jsonwebtoken": "^9.0.3",
     "ws": "^8.15.0"
   }
 }
