@@ -1,4 +1,4 @@
-// serverHttps.js - Metered Correct Version
+
 import fs from "fs";
 import http from "http";
 import https from "https";
@@ -8,7 +8,7 @@ import { WebSocketServer } from "ws";
 const PORT = process.env.PORT || 8080;
 const USE_SSL = process.env.USE_SSL === "true";
 
-// ⭐ Your Metered App Details (from Metered dashboard)
+
 const METERED_APP_DOMAIN = 'webrtc_calling_app.metered.live';
 const METERED_SECRET_KEY = process.env.METERED_SECRET_KEY || 'd534ddd0a0cc115b19aaa0e5a7437231814a';
 
@@ -31,7 +31,7 @@ server.on('request', async (req, res) => {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // Handle CORS preflight
+
   if (req.method === 'OPTIONS') {
     res.writeHead(200);
     res.end();
@@ -57,10 +57,9 @@ server.on('request', async (req, res) => {
       const data = await response.json();
       console.log('✅ Got TURN credentials from Metered');
 
-      // Metered returns an array directly, wrap it in iceServers object
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
-        iceServers: data  // Wrap the array in iceServers
+        iceServers: data  
       }));
     } catch (error) {
       console.error('Error fetching TURN credentials:', error);
