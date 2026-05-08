@@ -170,7 +170,10 @@ server.on('request', async (req, res) => {
 
 	else if (req.method === "GET" && req.url === "/admin/requests") {
 
-		if (req.headers.authorization !== ADMIN_TOKEN) {
+		try {
+			const decoded = jwt.verify(req.headers.authorization, SECRET);
+			if (decoded.role !== "admin") throw new Error();
+		} catch {
 			res.writeHead(403);
 			return res.end("Forbidden");
 		}
@@ -186,7 +189,10 @@ server.on('request', async (req, res) => {
 
 	else if (req.method === "POST" && req.url === "/admin/approve") {
 
-		if (req.headers.authorization !== ADMIN_TOKEN) {
+		try {
+			const decoded = jwt.verify(req.headers.authorization, SECRET);
+			if (decoded.role !== "admin") throw new Error();
+		} catch {
 			res.writeHead(403);
 			return res.end("Forbidden");
 		}
@@ -220,7 +226,10 @@ server.on('request', async (req, res) => {
 
 	else if (req.method === "POST" && req.url === "/admin/reject") {
 
-		if (req.headers.authorization !== ADMIN_TOKEN) {
+		try {
+			const decoded = jwt.verify(req.headers.authorization, SECRET);
+			if (decoded.role !== "admin") throw new Error();
+		} catch {
 			res.writeHead(403);
 			return res.end("Forbidden");
 		}
@@ -245,8 +254,10 @@ server.on('request', async (req, res) => {
 	/* ------------ OWNER: LIST APPROVED USERS ------------ */
 	else if (req.method === "GET" && req.url === "/admin/approved") {
 
-		// Only admin can list approved users
-		if (req.headers.authorization !== ADMIN_TOKEN) {
+		try {
+			const decoded = jwt.verify(req.headers.authorization, SECRET);
+			if (decoded.role !== "admin") throw new Error();
+		} catch {
 			res.writeHead(403);
 			return res.end("Forbidden");
 		}
@@ -261,8 +272,10 @@ server.on('request', async (req, res) => {
 	/* ------------ OWNER: REMOVE APPROVED USER ------------ */
 	else if (req.method === "POST" && req.url === "/admin/remove") {
 
-		// Only admin can remove users
-		if (req.headers.authorization !== ADMIN_TOKEN) {
+		try {
+			const decoded = jwt.verify(req.headers.authorization, SECRET);
+			if (decoded.role !== "admin") throw new Error();
+		} catch {
 			res.writeHead(403);
 			return res.end("Forbidden");
 		}
