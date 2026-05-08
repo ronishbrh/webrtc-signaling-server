@@ -118,8 +118,18 @@ server.on("request", async (req, res) => {
 	// ---------- ADMIN CHECK HELPER ----------
 	function verifyAdmin(req, res) {
 		try {
-			const decoded = jwt.verify(req.headers.authorization, SECRET);
+			const authHeader = req.headers.authorization;
+
+			if (!authHeader) throw new Error();
+			
+			const token = authHeader.startsWith("Bearer ")
+				? authHeader.split(" ")[1]
+				: authHeader;
+
+			const decoded = jwt.verify(token, SECRET);
+
 			if (!decoded || decoded.role !== "admin") throw new Error();
+
 			return true;
 		} catch {
 			res.writeHead(403);
@@ -127,7 +137,6 @@ server.on("request", async (req, res) => {
 			return false;
 		}
 	}
-
 	// ---------- REQUESTS ----------
 	if (req.method === "GET" && url === "/admin/requests") {
 		if (!verifyAdmin(req, res)) return;
