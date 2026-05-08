@@ -269,59 +269,74 @@ server.on("request", async (req, res) => {
 	}
 
 	// ---------- AUTH VERIFY ----------
+	// ---------- AUTH VERIFY ----------
 	if (url === "/auth/verify" && req.method === "POST") {
 		let body = "";
-
 		req.on("data", c => (body += c));
 
-		req.on("end", () => {
-			const { publicKey, signature } = JSON.parse(body);
+		req.on("end", async () => {
+			try {
+				const { publicKey, signature } = JSON.parse(body);
 
-			if (!approvedUsers.has(publicKey)) {
-				res.writeHead(403);
-				return res.end("not approved");
+				if (!approvedUsers.has(publicKey)) {
+					res.writeHead(403);
+					return res.end("not approved");
+				}
+
+				const nonce = challenges.get(publicKey);
+				if (!nonce) {
+					res.writeHead(400);
+					return res.end("no challenge");
+				}
+
+				// ── FIX: use Web Crypto-compatible ECDSA verification ──
+				const keyBuffer = Buffer.from(publicKey, "base64");
+
+				const cryptoKey = await crypto.subtle.importKey(
+					"spki",
+					keyBuffer,
+					{ name: "ECDSA", namedCurve: "P-256" },
+					false,
+					["verify"]
+				);
+
+				const signatureBuffer = Buffer.from(signature, "base64");
+				const nonceBuffer = new TextEncoder().encode(nonce);
+
+				const valid = await crypto.subtle.verify(
+					{ name: "ECDSA", hash: { name: "SHA-256" } },
+					cryptoKey,
+					signatureBuffer,
+					nonceBuffer
+				);
+
+				if (!valid) {
+					res.writeHead(401);
+					return res.end("invalid signature");
+				}
+
+				challenges.delete(publicKey);
+
+				const token = jwt.sign(
+					{
+						user: publicKey,
+						role: publicKey === ADMIN_KEY ? "admin" : "user",
+					},
+					SECRET,
+					{ expiresIn: "1h" }
+				);
+
+				res.writeHead(200, { "Content-Type": "application/json" });
+				res.end(JSON.stringify({
+					token,
+					isAdmin: publicKey === ADMIN_KEY,
+				}));
+
+			} catch (err) {
+				console.error("Verify error:", err);
+				res.writeHead(500);
+				res.end("Server error");
 			}
-
-			const nonce = challenges.get(publicKey);
-			if (!nonce) {
-				res.writeHead(400);
-				return res.end("no challenge");
-			}
-
-			const verify = crypto.createVerify("SHA256");
-			verify.update(nonce);
-
-			const pem =
-				`-----BEGIN PUBLIC KEY-----\n` +
-				publicKey.match(/.{1,64}/g).join("\n") +
-				`\n-----END PUBLIC KEY-----`;
-
-			const valid = verify.verify(
-				pem,
-				Buffer.from(signature, "base64")
-			);
-
-			if (!valid) {
-				res.writeHead(401);
-				return res.end("invalid signature");
-			}
-
-			challenges.delete(publicKey);
-
-			const token = jwt.sign(
-				{
-					user: publicKey,
-					role: publicKey === ADMIN_KEY ? "admin" : "user",
-				},
-				SECRET,
-				{ expiresIn: "1h" }
-			);
-
-			res.writeHead(200);
-			res.end(JSON.stringify({
-				token,
-				isAdmin: publicKey === ADMIN_KEY,
-			}));
 		});
 
 		return;
