@@ -103,9 +103,11 @@ server.on("request", async (req, res) => {
 		req.on("end", () => {
 			const { publicKey, message } = JSON.parse(body);
 
-			registrationQueue.set(publicKey, {
-				publicKey,
-				message,
+			const key = String(publicKey).trim();
+
+			registrationQueue.set(key, {
+				publicKey: key,
+				message: String(message),
 				time: Date.now(),
 			});
 
@@ -121,7 +123,7 @@ server.on("request", async (req, res) => {
 			const authHeader = req.headers.authorization;
 
 			if (!authHeader) throw new Error();
-			
+
 			const token = authHeader.startsWith("Bearer ")
 				? authHeader.split(" ")[1]
 				: authHeader;
@@ -154,6 +156,7 @@ server.on("request", async (req, res) => {
 
 		req.on("end", () => {
 			const { publicKey } = JSON.parse(body);
+			const key = String(publicKey).trim();
 
 			registrationQueue.delete(publicKey);
 			approvedUsers.set(publicKey, true);
@@ -209,6 +212,37 @@ server.on("request", async (req, res) => {
 		});
 
 		return;
+	}
+
+	// ---------- STATUS CHECK ----------
+	if (req.method === "GET" && url === "/auth/status") {
+		const auth = req.headers.authorization;
+
+		if (!auth) {
+			res.writeHead(401);
+			return res.end("No token");
+		}
+
+		try {
+			const token = auth.startsWith("Bearer ")
+				? auth.split(" ")[1]
+				: auth;
+
+			const decoded = jwt.verify(token, SECRET);
+
+			const user = decoded.user;
+
+			const isApproved = approvedUsers.has(user);
+
+			res.writeHead(200, { "Content-Type": "application/json" });
+			return res.end(JSON.stringify({
+				approved: isApproved
+			}));
+
+		} catch {
+			res.writeHead(403);
+			return res.end("Forbidden");
+		}
 	}
 
 	// ---------- AUTH CHALLENGE ----------
