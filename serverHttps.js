@@ -9,321 +9,314 @@ import crypto from "crypto";
 const PORT = process.env.PORT || 8080;
 const USE_SSL = process.env.USE_SSL === "true";
 
-const METERED_APP_DOMAIN = 'webrtc_calling_app.metered.live';
-const METERED_SECRET_KEY = process.env.METERED_SECRET_KEY || 'd534ddd0a0cc115b19aaa0e5a7437231814a';
+const METERED_APP_DOMAIN = "webrtc_calling_app.metered.live";
+const METERED_SECRET_KEY =
+    process.env.METERED_SECRET_KEY || "d534ddd0a0cc115b19aaa0e5a7437231814a";
 
 const SECRET = "super-secret-key";
 let ADMIN_TOKEN = "";
 
-const ADMIN_key = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElcQEtZdf80JRmmQK0rZmzMGLaNy+alxm9/VOu/UC7mHSVBQB5Le+2OjqPvcKgTLwUSBYY6iDEwIjWuB4mkkoXw==";
+const ADMIN_key =
+    "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElcQEtZdf80JRmmQK0rZmzMGLaNy+alxm9/VOu/UC7mHSVBQB5Le+2OjqPvcKgTLwUSBYY6iDEwIjWuB4mkkoXw==";
+
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 
 const challenges = new Map();
 const approvedUsers = new Map();
 const registrationQueue = new Map();
 
-// IMPORTANT FIX: declare before usage
-const clients = {};
-
 approvedUsers.set(ADMIN_key, true);
 
+// ---------- SERVER ----------
 let server;
 
 if (USE_SSL) {
-	server = https.createServer({
-		key: fs.readFileSync(process.env.SSL_KEY_PATH),
-		cert: fs.readFileSync(process.env.SSL_CERT_PATH),
-	});
+    server = https.createServer({
+        key: fs.readFileSync(process.env.SSL_KEY_PATH),
+        cert: fs.readFileSync(process.env.SSL_CERT_PATH),
+    });
 } else {
-	server = http.createServer();
+    server = http.createServer();
 }
 
-// ---------- REQUEST HANDLER ----------
+// ---------- CORS ----------
 server.on("request", async (req, res) => {
+    const url = req.url.replace(/\/$/, "");
 
-	// IMPORTANT FIX: normalize URL
-	const url = req.url.replace(/\/$/, "");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-	// CORS
-	res.setHeader("Access-Control-Allow-Origin", "*");
-	res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-	res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    if (req.method === "OPTIONS") {
+        res.writeHead(200);
+        return res.end();
+    }
 
-	if (req.method === "OPTIONS") {
-		res.writeHead(200);
-		return res.end();
-	}
+    // ---------- ADMIN LOGIN (FIXED) ----------
+    if (req.method === "POST" && url === "/auth/admin-login") {
+        let body = "";
 
-	// ---------- ADMIN LOGIN ----------
-	if (req.method === "POST" && url === "/auth/admin-login") {
+        req.on("data", (c) => (body += c));
 
-		let body = "";
+        req.on("end", () => {
+            try {
+                const { password } = JSON.parse(body);
 
-		req.on("data", chunk => body += chunk);
+                if (password !== ADMIN_PASSWORD) {
+                    res.writeHead(401, { "Content-Type": "application/json" });
+                    return res.end(JSON.stringify({ error: "Invalid password" }));
+                }
 
-		req.on("end", () => {
-			try {
-				const { password } = JSON.parse(body);
+                const token = jwt.sign(
+                    { user: ADMIN_key, role: "admin" },
+                    SECRET,
+                    { expiresIn: "1h" }
+                );
 
-				if (password !== ADMIN_PASSWORD) {
-					res.writeHead(401, { "Content-Type": "application/json" });
-					return res.end(JSON.stringify({ error: "Invalid password" }));
-				}
+                ADMIN_TOKEN = token;
 
-				const token = jwt.sign(
-					{ user: ADMIN_key, role: "admin" },
-					SECRET,
-					{ expiresIn: "1h" }
-				);
+                res.writeHead(200, { "Content-Type": "application/json" });
+                return res.end(JSON.stringify({ token, isAdmin: true }));
+            } catch {
+                res.writeHead(500);
+                return res.end("Server error");
+            }
+        });
 
-				ADMIN_TOKEN = token;
+        return;
+    }
 
-				res.writeHead(200, { "Content-Type": "application/json" });
-				return res.end(JSON.stringify({ token, isAdmin: true }));
+    // ---------- HEALTH ----------
+    if (req.url === "/api/health") {
+        res.writeHead(200);
+        return res.end(JSON.stringify({ status: "ok" }));
+    }
 
-			} catch (e) {
-				res.writeHead(500, { "Content-Type": "application/json" });
-				return res.end(JSON.stringify({ error: "Server error" }));
-			}
-		});
+    // ---------- REGISTER ----------
+    if (req.method === "POST" && url === "/register") {
+        let body = "";
 
-		return;
-	}
+        req.on("data", (c) => (body += c));
 
-	// ---------- TURN ----------
-	if (url === "/api/turn-credentials" && req.method === "GET") {
-		try {
-			const metered_url = `https://${METERED_APP_DOMAIN}/api/v1/turn/credentials?apiKey=${METERED_SECRET_KEY}`;
-			const response = await fetch(metered_url);
+        req.on("end", () => {
+            const { publicKey, message } = JSON.parse(body);
 
-			const data = await response.json();
+            registrationQueue.set(publicKey, {
+                publicKey,
+                message,
+                time: Date.now(),
+            });
 
-			res.writeHead(200, { "Content-Type": "application/json" });
-			return res.end(JSON.stringify({ iceServers: data }));
+            res.writeHead(200);
+            res.end("OK");
+        });
+        return;
+    }
 
-		} catch (e) {
-			res.writeHead(500);
-			return res.end(JSON.stringify({ error: "TURN error" }));
-		}
-	}
+    // ---------- ADMIN CHECK HELPER ----------
+    function verifyAdmin(req, res) {
+        try {
+            const decoded = jwt.verify(req.headers.authorization, SECRET);
+            if (!decoded || decoded.role !== "admin") throw new Error();
+            return true;
+        } catch {
+            res.writeHead(403);
+            res.end("Forbidden");
+            return false;
+        }
+    }
 
-	// ---------- REGISTER ----------
-	if (req.method === "POST" && url === "/register") {
+    // ---------- REQUESTS ----------
+    if (req.method === "GET" && url === "/admin/requests") {
+        if (!verifyAdmin(req, res)) return;
 
-		let body = "";
+        res.writeHead(200, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify([...registrationQueue.values()]));
+    }
 
-		req.on("data", c => body += c);
+    // ---------- APPROVE ----------
+    if (req.method === "POST" && url === "/admin/approve") {
+        if (!verifyAdmin(req, res)) return;
 
-		req.on("end", () => {
-			const { publicKey, message } = JSON.parse(body);
+        let body = "";
+        req.on("data", (c) => (body += c));
 
-			if (approvedUsers.has(publicKey) || registrationQueue.has(publicKey)) {
-				res.writeHead(400);
-				return res.end("Already exists");
-			}
+        req.on("end", () => {
+            const { publicKey } = JSON.parse(body);
 
-			registrationQueue.set(publicKey, {
-				publicKey,
-				message,
-				time: Date.now()
-			});
+            registrationQueue.delete(publicKey);
+            approvedUsers.set(publicKey, true);
 
-			res.writeHead(200);
-			return res.end("OK");
-		});
-	}
+            res.writeHead(200);
+            res.end("approved");
+        });
 
-	// ---------- ADMIN REQUESTS ----------
-	if (url === "/admin/requests" && req.method === "GET") {
-		try {
-			jwt.verify(req.headers.authorization, SECRET);
-		} catch {
-			res.writeHead(403);
-			return res.end("Forbidden");
-		}
+        return;
+    }
 
-		res.writeHead(200, { "Content-Type": "application/json" });
-		return res.end(JSON.stringify([...registrationQueue.values()]));
-	}
+    // ---------- REJECT ----------
+    if (req.method === "POST" && url === "/admin/reject") {
+        if (!verifyAdmin(req, res)) return;
 
-	// ---------- APPROVE ----------
-	if (url === "/admin/approve" && req.method === "POST") {
+        let body = "";
+        req.on("data", (c) => (body += c));
 
-		let body = "";
-		req.on("data", c => body += c);
+        req.on("end", () => {
+            const { publicKey } = JSON.parse(body);
 
-		req.on("end", () => {
-			const { publicKey } = JSON.parse(body);
+            registrationQueue.delete(publicKey);
 
-			if (!registrationQueue.has(publicKey)) {
-				res.writeHead(404);
-				return res.end("Not found");
-			}
+            res.writeHead(200);
+            res.end("rejected");
+        });
 
-			registrationQueue.delete(publicKey);
-			approvedUsers.set(publicKey, true);
+        return;
+    }
 
-			res.writeHead(200);
-			return res.end("Approved");
-		});
-	}
+    // ---------- APPROVED USERS ----------
+    if (req.method === "GET" && url === "/admin/approved") {
+        if (!verifyAdmin(req, res)) return;
 
-	// ---------- REJECT ----------
-	if (url === "/admin/reject" && req.method === "POST") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify([...approvedUsers.keys()]));
+    }
 
-		let body = "";
-		req.on("data", c => body += c);
+    // ---------- REMOVE USER ----------
+    if (req.method === "POST" && url === "/admin/remove") {
+        if (!verifyAdmin(req, res)) return;
 
-		req.on("end", () => {
-			const { publicKey } = JSON.parse(body);
-			registrationQueue.delete(publicKey);
+        let body = "";
+        req.on("data", (c) => (body += c));
 
-			res.writeHead(200);
-			return res.end("Rejected");
-		});
-	}
+        req.on("end", () => {
+            const { publicKey } = JSON.parse(body);
 
-	// ---------- APPROVED LIST ----------
-	if (url === "/admin/approved" && req.method === "GET") {
-		res.writeHead(200, { "Content-Type": "application/json" });
-		return res.end(JSON.stringify([...approvedUsers.keys()]));
-	}
+            approvedUsers.delete(publicKey);
 
-	// ---------- REMOVE ----------
-	if (url === "/admin/remove" && req.method === "POST") {
+            res.writeHead(200);
+            res.end("removed");
+        });
 
-		let body = "";
-		req.on("data", c => body += c);
+        return;
+    }
 
-		req.on("end", () => {
-			const { publicKey } = JSON.parse(body);
+    // ---------- AUTH CHALLENGE ----------
+    if (req.method === "POST" && url === "/auth/challenge") {
+        let body = "";
 
-			approvedUsers.delete(publicKey);
+        req.on("data", (c) => (body += c));
 
-			res.writeHead(200);
-			return res.end("Removed");
-		});
-	}
+        req.on("end", () => {
+            const { publicKey } = JSON.parse(body);
 
-	// ---------- CHALLENGE ----------
-	if (url === "/auth/challenge" && req.method === "POST") {
+            const nonce = crypto.randomBytes(32).toString("hex");
+            challenges.set(publicKey, nonce);
 
-		let body = "";
-		req.on("data", c => body += c);
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ nonce }));
+        });
 
-		req.on("end", () => {
-			const { publicKey } = JSON.parse(body);
+        return;
+    }
 
-			const nonce = crypto.randomBytes(32).toString("hex");
-			challenges.set(publicKey, nonce);
+    // ---------- VERIFY (FIXED SIGNATURE HANDLING) ----------
+    if (req.method === "POST" && url === "/auth/verify") {
+        let body = "";
 
-			res.writeHead(200, { "Content-Type": "application/json" });
-			return res.end(JSON.stringify({ nonce }));
-		});
-	}
+        req.on("data", (c) => (body += c));
 
-	// ---------- VERIFY ----------
-	if (url === "/auth/verify" && req.method === "POST") {
+        req.on("end", () => {
+            try {
+                const { publicKey, signature } = JSON.parse(body);
 
-		let body = "";
-		req.on("data", c => body += c);
+                if (!approvedUsers.has(publicKey)) {
+                    res.writeHead(403);
+                    return res.end("not approved");
+                }
 
-		req.on("end", () => {
+                const nonce = challenges.get(publicKey);
 
-			try {
-				const { publicKey, signature } = JSON.parse(body);
+                const verify = crypto.createVerify("SHA256");
+                verify.update(nonce);
+                verify.end();
 
-				const nonce = challenges.get(publicKey);
-				if (!nonce) {
-					res.writeHead(401);
-					return res.end("No nonce");
-				}
+                const valid = verify.verify(
+                    publicKey,
+                    Buffer.from(signature, "base64")
+                );
 
-				const verify = crypto.createVerify("SHA256");
-				verify.update(nonce);
-				verify.end();
+                if (!valid) {
+                    res.writeHead(401);
+                    return res.end("invalid signature");
+                }
 
-				// FIX: consistent format (base64)
-				const valid = verify.verify(publicKey, Buffer.from(signature, "base64"));
+                const token = jwt.sign(
+                    {
+                        user: publicKey,
+                        role: publicKey === ADMIN_key ? "admin" : "user",
+                    },
+                    SECRET,
+                    { expiresIn: "1h" }
+                );
 
-				if (!valid) {
-					res.writeHead(401);
-					return res.end("Invalid signature");
-				}
+                if (publicKey === ADMIN_key) {
+                    ADMIN_TOKEN = token;
+                }
 
-				const token = jwt.sign(
-					{ user: publicKey, role: "user" },
-					SECRET,
-					{ expiresIn: "1h" }
-				);
+                res.writeHead(200, { "Content-Type": "application/json" });
+                res.end(
+                    JSON.stringify({
+                        token,
+                        isAdmin: publicKey === ADMIN_key,
+                    })
+                );
+            } catch {
+                res.writeHead(500);
+                res.end("verify error");
+            }
+        });
 
-				if (publicKey === ADMIN_key) ADMIN_TOKEN = token;
+        return;
+    }
 
-				res.writeHead(200, { "Content-Type": "application/json" });
-				return res.end(JSON.stringify({
-					token,
-					isAdmin: publicKey === ADMIN_key
-				}));
-
-			} catch (e) {
-				res.writeHead(500);
-				return res.end("Error while creating token");
-			}
-		});
-	}
-
-	// fallback
-	res.writeHead(404);
-	res.end();
+    res.writeHead(404);
+    res.end("Not found");
 });
 
-// ---------- WS ----------
+// ---------- WEBSOCKET ----------
 const wss = new WebSocketServer({ server });
+const clients = {};
 
 wss.on("connection", (ws, req) => {
+    const url = new URL(req.url, "http://localhost");
+    const token = url.searchParams.get("token");
 
-	ws.isAlive = true;
+    if (!token) return ws.close();
 
-	const url = new URL(req.url, `http://${req.headers.host}`);
-	const token = url.searchParams.get("token");
+    let payload;
 
-	if (!token) return ws.close();
+    try {
+        payload = jwt.verify(token, SECRET);
+    } catch {
+        return ws.close();
+    }
 
-	let payload;
+    const userId = payload.user;
 
-	try {
-		payload = jwt.verify(token, SECRET);
-	} catch {
-		return ws.close();
-	}
+    ws.on("message", (msg) => {
+        const data = JSON.parse(msg);
 
-	const userId = payload.user;
+        if (data.type === "register") {
+            clients[userId] = ws;
+            return;
+        }
 
-	if (!approvedUsers.has(userId)) return ws.close();
-
-	let username = null;
-
-	ws.on("message", msg => {
-
-		let data;
-		try { data = JSON.parse(msg); } catch { return; }
-
-		if (data.type === "register") {
-			username = userId;
-			clients[username] = ws;
-			return;
-		}
-
-		const target = clients[data.to];
-		if (target) target.send(JSON.stringify(data));
-	});
-
-	ws.on("close", () => {
-		if (username) delete clients[username];
-	});
+        const target = clients[data.to];
+        if (target) target.send(JSON.stringify(data));
+    });
 });
 
 // ---------- START ----------
 server.listen(PORT, () => {
-	console.log("Server running on", PORT);
+    console.log("Server running on", PORT);
 });
