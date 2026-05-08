@@ -427,29 +427,29 @@ wss.on("connection", (ws, req) => {
 	ws.isAlive = true;
 
 	// ================= AUTH TOKEN =================
-	const url = new URL(req.url, `http://${req.headers.host}`);
-	const token = url.searchParams.get("token");
+	// const url = new URL(req.url, `http://${req.headers.host}`);
+	// const token = url.searchParams.get("token");
 
-	if (!token) {
-		ws.close(1008, "Token required");
-		return;
-	}
+	// if (!token) {
+	// 	ws.close(1008, "Token required");
+	// 	return;
+	// }
 
-	let payload;
+	// let payload;
 
-	try {
-		payload = jwt.verify(token, SECRET);
-	} catch (err) {
-		ws.close(1008, "Invalid or expired token");
-		return;
-	}
+	// try {
+	// 	payload = jwt.verify(token, SECRET);
+	// } catch (err) {
+	// 	ws.close(1008, "Invalid or expired token");
+	// 	return;
+	// }
 
-	const userId = payload.user;
+	// const userId = payload.user;
 
-	if (!approvedUsers.has(userId)) {
-		ws.close(1008, "User not approved");
-		return;
-	}
+	// if (!approvedUsers.has(userId)) {
+	// 	ws.close(1008, "User not approved");
+	// 	return;
+	// }
 
 	let username = null;
 
