@@ -215,16 +215,14 @@ server.on("request", async (req, res) => {
 	}
 
 	// ---------- STATUS CHECK ----------
+	// ---------- STATUS CHECK ----------
 	if (req.method === "GET" && url === "/auth/status") {
-		if (!verifyAdmin(req, res)) return;
-
 		const authHeader = req.headers.authorization;
 		const token = authHeader?.split(" ")[1];
 
 		try {
 			const decoded = jwt.verify(token, SECRET);
 			const user = decoded.user;
-
 			const approved = approvedUsers.has(user);
 
 			res.writeHead(200, { "Content-Type": "application/json" });
