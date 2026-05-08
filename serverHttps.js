@@ -216,32 +216,22 @@ server.on("request", async (req, res) => {
 
 	// ---------- STATUS CHECK ----------
 	if (req.method === "GET" && url === "/auth/status") {
-		const auth = req.headers.authorization;
+		if (!verifyAdmin(req, res)) return;
 
-		if (!auth) {
-			res.writeHead(401);
-			return res.end("No token");
-		}
+		const authHeader = req.headers.authorization;
+		const token = authHeader?.split(" ")[1];
 
 		try {
-			const token = auth.startsWith("Bearer ")
-				? auth.split(" ")[1]
-				: auth;
-
 			const decoded = jwt.verify(token, SECRET);
-
 			const user = decoded.user;
 
-			const isApproved = approvedUsers.has(user);
+			const approved = approvedUsers.has(user);
 
 			res.writeHead(200, { "Content-Type": "application/json" });
-			return res.end(JSON.stringify({
-				approved: isApproved
-			}));
-
+			return res.end(JSON.stringify({ approved }));
 		} catch {
-			res.writeHead(403);
-			return res.end("Forbidden");
+			res.writeHead(401);
+			return res.end(JSON.stringify({ approved: false }));
 		}
 	}
 
