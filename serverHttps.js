@@ -349,11 +349,12 @@ server.on("request", async (req, res) => {
 // ---------------- WEBSOCKET ----------------
 const wss = new WebSocketServer({ server });
 
-wss.on("connection", (ws) => {
+wss.on("connection", (ws, req) => {
 	let username = null;
 
 	ws.on("message", (msg) => {
 		let data;
+
 
 		try {
 			data = JSON.parse(msg);
@@ -363,16 +364,43 @@ wss.on("connection", (ws) => {
 
 		// ---------- REGISTER ----------
 		if (data.type === "register") {
-			username = data.userName;
-
-			if (clients[username]) {
-				clients[username].close();
+			// ── FIX: require a valid token ──
+			if (!data.token) {
+				ws.send(JSON.stringify({ type: "error", message: "No token provided" }));
+				ws.close();
+				return;
 			}
 
+			try {
+				const decoded = jwt.verify(data.token, SECRET);
+
+				// Ensure the token's user matches the claimed userName
+				if (decoded.user !== data.userName) {
+					ws.send(JSON.stringify({ type: "error", message: "Token mismatch" }));
+					ws.close();
+					return;
+				}
+
+				// Ensure the user is still approved
+				if (!approvedUsers.has(decoded.user)) {
+					ws.send(JSON.stringify({ type: "error", message: "Not approved" }));
+					ws.close();
+					return;
+				}
+
+			} catch (err) {
+				ws.send(JSON.stringify({ type: "error", message: "Invalid token" }));
+				ws.close();
+				return;
+			}
+
+			username = data.userName;
+			if (clients[username]) clients[username].close();
 			clients[username] = ws;
 			console.log(`User registered: ${username}`);
 			return;
 		}
+
 
 		// ---------- SIGNAL TYPES ----------
 		const allowedTypes = [
