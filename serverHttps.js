@@ -273,12 +273,23 @@ server.on("request", async (req, res) => {
 
 				const nonce = challenges.get(publicKey);
 
+				if (!nonce) {
+					res.writeHead(400);
+					return res.end("no challenge found — request a new challenge first");
+				}
+
+				// Convert base64 SPKI → PEM so Node crypto can parse it
+				const pemKey =
+					`-----BEGIN PUBLIC KEY-----\n` +
+					publicKey.match(/.{1,64}/g).join("\n") +
+					`\n-----END PUBLIC KEY-----`;
+
+				// ECDSA P-256 with SHA-256 — must use "SHA256" algorithm name
 				const verify = crypto.createVerify("SHA256");
 				verify.update(nonce);
-				verify.end();
 
 				const valid = verify.verify(
-					publicKey,
+					pemKey,
 					Buffer.from(signature, "base64")
 				);
 
@@ -286,6 +297,9 @@ server.on("request", async (req, res) => {
 					res.writeHead(401);
 					return res.end("invalid signature");
 				}
+
+				// Clear used challenge to prevent replay attacks
+				challenges.delete(publicKey);
 
 				const token = jwt.sign(
 					{
@@ -301,13 +315,13 @@ server.on("request", async (req, res) => {
 				}
 
 				res.writeHead(200, { "Content-Type": "application/json" });
-				res.end(
-					JSON.stringify({
-						token,
-						isAdmin: publicKey === ADMIN_key,
-					})
-				);
-			} catch {
+				res.end(JSON.stringify({
+					token,
+					isAdmin: publicKey === ADMIN_key,
+				}));
+
+			} catch (err) {
+				console.error("verify error:", err);
 				res.writeHead(500);
 				res.end("verify error");
 			}
