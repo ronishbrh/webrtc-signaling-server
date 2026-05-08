@@ -2,7 +2,7 @@ import fs from "fs";
 import http from "http";
 import https from "https";
 import { WebSocketServer } from "ws";
-import { subtle } from "crypto";
+
 
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
@@ -18,6 +18,8 @@ const METERED_SECRET_KEY = process.env.METERED_SECRET_KEY || 'd534ddd0a0cc115b19
 const SECRET = "super-secret-key";
 let ADMIN_TOKEN = "";
 const ADMIN_key = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElcQEtZdf80JRmmQK0rZmzMGLaNy+alxm9/VOu/UC7mHSVBQB5Le+2OjqPvcKgTLwUSBYY6iDEwIjWuB4mkkoXw==";
+
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 
 const challenges = new Map();
 const approvedUsers = new Map();
@@ -104,6 +106,35 @@ server.on('request', async (req, res) => {
 			}
 		}));
 		return;
+	}
+
+	/* ------------ ADMIN LOGIN ------------ */
+	else if (req.method === "POST" && req.url === "/auth/admin-login") {
+
+		let body = "";
+
+		req.on("data", chunk => body += chunk);
+
+		req.on("end", () => {
+
+			const { password } = JSON.parse(body);
+
+			if (password !== ADMIN_PASSWORD) {
+				res.writeHead(401, { "Content-Type": "application/json" });
+				return res.end(JSON.stringify({ error: "Invalid password" }));
+			}
+
+			const token = jwt.sign(
+				{ role: "admin" },
+				SECRET,
+				{ expiresIn: "1h" }
+			);
+
+			ADMIN_TOKEN = token;
+
+			res.writeHead(200, { "Content-Type": "application/json" });
+			res.end(JSON.stringify({ token }));
+		});
 	}
 
 	// REGISTER REQUEST
