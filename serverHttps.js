@@ -108,7 +108,6 @@ server.on('request', async (req, res) => {
 		return;
 	}
 
-	/* ------------ ADMIN LOGIN ------------ */
 	else if (req.method === "POST" && req.url === "/auth/admin-login") {
 
 		let body = "";
@@ -117,23 +116,29 @@ server.on('request', async (req, res) => {
 
 		req.on("end", () => {
 
-			const { password } = JSON.parse(body);
+			try {
+				const { password } = JSON.parse(body || "{}");
 
-			if (password !== ADMIN_PASSWORD) {
-				res.writeHead(401, { "Content-Type": "application/json" });
-				return res.end(JSON.stringify({ error: "Invalid password" }));
+				if (password !== ADMIN_PASSWORD) {
+					res.writeHead(401, { "Content-Type": "application/json" });
+					return res.end(JSON.stringify({ error: "Invalid password" }));
+				}
+
+				const token = jwt.sign(
+					{ role: "admin" },
+					SECRET,
+					{ expiresIn: "1h" }
+				);
+
+				ADMIN_TOKEN = token;
+
+				res.writeHead(200, { "Content-Type": "application/json" });
+				return res.end(JSON.stringify({ token }));
+
+			} catch (err) {
+				res.writeHead(500, { "Content-Type": "application/json" });
+				return res.end(JSON.stringify({ error: "Server error" }));
 			}
-
-			const token = jwt.sign(
-				{ role: "admin" },
-				SECRET,
-				{ expiresIn: "1h" }
-			);
-
-			ADMIN_TOKEN = token;
-
-			res.writeHead(200, { "Content-Type": "application/json" });
-			res.end(JSON.stringify({ token }));
 		});
 	}
 
