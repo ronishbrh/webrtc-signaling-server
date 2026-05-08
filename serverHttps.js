@@ -364,9 +364,8 @@ wss.on("connection", (ws, req) => {
 
 		// ---------- REGISTER ----------
 		if (data.type === "register") {
-			// ── FIX: require a valid token ──
-			if (!data.token) {
-				ws.send(JSON.stringify({ type: "error", message: "No token provided" }));
+			if (!data.token || !data.publicKey || !data.userName) {
+				ws.send(JSON.stringify({ type: "error", message: "Missing fields" }));
 				ws.close();
 				return;
 			}
@@ -374,15 +373,14 @@ wss.on("connection", (ws, req) => {
 			try {
 				const decoded = jwt.verify(data.token, SECRET);
 
-				// Ensure the token's user matches the claimed userName
-				if (decoded.user !== data.userName) {
+				// ✅ Validate using publicKey (NOT userName)
+				if (decoded.user !== data.publicKey) {
 					ws.send(JSON.stringify({ type: "error", message: "Token mismatch" }));
 					ws.close();
 					return;
 				}
 
-				// Ensure the user is still approved
-				if (!approvedUsers.has(decoded.user)) {
+				if (!approvedUsers.has(data.publicKey)) {
 					ws.send(JSON.stringify({ type: "error", message: "Not approved" }));
 					ws.close();
 					return;
@@ -395,12 +393,14 @@ wss.on("connection", (ws, req) => {
 			}
 
 			username = data.userName;
+
 			if (clients[username]) clients[username].close();
+
 			clients[username] = ws;
+
 			console.log(`User registered: ${username}`);
 			return;
 		}
-
 
 		// ---------- SIGNAL TYPES ----------
 		const allowedTypes = [
