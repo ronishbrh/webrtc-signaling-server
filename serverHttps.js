@@ -108,6 +108,8 @@ server.on('request', async (req, res) => {
 		return;
 	}
 
+	/* ------------ ADMIN LOGIN (PASSWORD BASED) ------------ */
+
 	else if (req.method === "POST" && req.url === "/auth/admin-login") {
 
 		let body = "";
@@ -117,15 +119,19 @@ server.on('request', async (req, res) => {
 		req.on("end", () => {
 
 			try {
-				const { password } = JSON.parse(body || "{}");
+				const { password } = JSON.parse(body);
+
+				// 🔐 CHANGE THIS PASSWORD
+				const ADMIN_PASSWORD = "admin123";
 
 				if (password !== ADMIN_PASSWORD) {
 					res.writeHead(401, { "Content-Type": "application/json" });
 					return res.end(JSON.stringify({ error: "Invalid password" }));
 				}
 
+				// create admin token (same style as your system)
 				const token = jwt.sign(
-					{ role: "admin" },
+					{ user: ADMIN_key, isAdmin: true },
 					SECRET,
 					{ expiresIn: "1h" }
 				);
@@ -133,13 +139,18 @@ server.on('request', async (req, res) => {
 				ADMIN_TOKEN = token;
 
 				res.writeHead(200, { "Content-Type": "application/json" });
-				return res.end(JSON.stringify({ token }));
+				res.end(JSON.stringify({
+					token,
+					isAdmin: true
+				}));
 
 			} catch (err) {
 				res.writeHead(500, { "Content-Type": "application/json" });
-				return res.end(JSON.stringify({ error: "Server error" }));
+				res.end(JSON.stringify({ error: "Server error" }));
 			}
+
 		});
+
 	}
 	// REGISTER REQUEST
 	if (req.method === "POST" && req.url === "/register") {
