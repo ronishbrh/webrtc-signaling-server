@@ -13,7 +13,7 @@ const METERED_SECRET_KEY = process.env.METERED_SECRET_KEY || 'd534ddd0a0cc115b19
 
 const SECRET = "super-secret-key";
 let ADMIN_TOKEN = "";
-const ADMIN_key = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE47QPQDeqs83kKYMWvvSdmBfIEMscBlAwvevp2Tauv/qE2Pbf/XRktCrp7nqNs7dARu0kZnNvdkWv4z+/7J2MlA==";
+const ADMIN_key = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElcQEtZdf80JRmmQK0rZmzMGLaNy+alxm9/VOu/UC7mHSVBQB5Le+2OjqPvcKgTLwUSBYY6iDEwIjWuB4mkkoXw==";
 
 const challenges = new Map();
 const approvedUsers = new Map();
@@ -338,7 +338,10 @@ server.on('request', async (req, res) => {
 			);
 
 			res.writeHead(200, { "Content-Type": "application/json" });
-			res.end(JSON.stringify({ token }));
+			res.end(JSON.stringify({
+				token,
+				isAdmin: publicKey === ADMIN_key
+			}));
 
 			if (publicKey == ADMIN_key) {
 				ADMIN_TOKEN = token;
