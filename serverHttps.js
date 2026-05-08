@@ -2,6 +2,7 @@ import fs from "fs";
 import http from "http";
 import https from "https";
 import { WebSocketServer } from "ws";
+import { subtle } from "crypto";
 
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
@@ -316,22 +317,33 @@ server.on('request', async (req, res) => {
 				return res.end("No challenge was given");
 			}
 
-			const verify = crypto.createVerify("SHA256");
-
-			verify.update(nonce);
-			verify.end();
-
 			try {
-				const valid = verify.verify(publicKey, signature, "hex");
+
+				// IMPORTANT: convert key properly
+				const keyObject = crypto.createPublicKey(publicKey);
+
+				const verifier = crypto.createVerify("SHA256");
+				verifier.update(nonce);
+				verifier.end();
+
+				const valid = verifier.verify(
+					keyObject,
+					signature,
+					"hex"
+				);
 
 				if (!valid) {
 					res.writeHead(401);
 					return res.end("Invalid signature");
 				}
 
+				
+				challenges.delete(publicKey);
+
 			} catch (error) {
+				console.error(error);
 				res.writeHead(401);
-				return res.end("Error while creating token");
+				return res.end("Error while verifying signature");
 			}
 
 			const token = jwt.sign(
@@ -346,12 +358,11 @@ server.on('request', async (req, res) => {
 				isAdmin: publicKey === ADMIN_key
 			}));
 
-			if (publicKey == ADMIN_key) {
+			if (publicKey === ADMIN_key) {
 				ADMIN_TOKEN = token;
 			}
 
 		});
-
 	}
 
 	else {
