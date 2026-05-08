@@ -235,6 +235,39 @@ server.on("request", async (req, res) => {
 		return;
 	}
 
+	// ---------- AUTH STATUS ----------
+	if (url === "/auth/status" && req.method === "GET") {
+		try {
+			const auth = req.headers.authorization;
+			if (!auth) {
+				res.writeHead(401);
+				return res.end("No token");
+			}
+
+			const token = auth.startsWith("Bearer ")
+				? auth.split(" ")[1]
+				: auth;
+
+			const decoded = jwt.verify(token, SECRET);
+
+			const publicKey = decoded.user;
+
+			const isApproved = approvedUsers.has(publicKey);
+
+			res.writeHead(200, { "Content-Type": "application/json" });
+			return res.end(JSON.stringify({
+				approved: isApproved
+			}));
+
+		} catch (err) {
+			res.writeHead(401);
+			return res.end(JSON.stringify({
+				approved: false,
+				error: "invalid token"
+			}));
+		}
+	}
+
 	// ---------- AUTH VERIFY ----------
 	if (url === "/auth/verify" && req.method === "POST") {
 		let body = "";
