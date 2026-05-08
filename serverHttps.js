@@ -42,7 +42,6 @@ if (USE_SSL) {
 // ---------- CORS ----------
 server.on("request", async (req, res) => {
 
-
 	res.setHeader("Access-Control-Allow-Origin", "*");
 	res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
 	res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
@@ -54,7 +53,7 @@ server.on("request", async (req, res) => {
 
 	const url = req.url.replace(/\/$/, "");
 
-	// ---------- ADMIN LOGIN (FIXED) ----------
+	// ---------- ADMIN LOGIN ----------
 	if (req.method === "POST" && url === "/auth/admin-login") {
 		let body = "";
 
@@ -139,6 +138,7 @@ server.on("request", async (req, res) => {
 			return false;
 		}
 	}
+
 	// ---------- REQUESTS ----------
 	if (req.method === "GET" && url === "/admin/requests") {
 		if (!verifyAdmin(req, res)) return;
@@ -158,8 +158,8 @@ server.on("request", async (req, res) => {
 			const { publicKey } = JSON.parse(body);
 			const key = String(publicKey).trim();
 
-			registrationQueue.delete(publicKey);
-			approvedUsers.set(publicKey, true);
+			registrationQueue.delete(key);
+			approvedUsers.set(key, true);
 
 			res.writeHead(200);
 			res.end("approved");
@@ -214,11 +214,15 @@ server.on("request", async (req, res) => {
 		return;
 	}
 
-	// ---------- STATUS CHECK ----------
-	// ---------- STATUS CHECK ----------
+	// ---------- STATUS CHECK (any valid JWT) ----------
 	if (req.method === "GET" && url === "/auth/status") {
 		const authHeader = req.headers.authorization;
 		const token = authHeader?.split(" ")[1];
+
+		if (!token) {
+			res.writeHead(401, { "Content-Type": "application/json" });
+			return res.end(JSON.stringify({ approved: false }));
+		}
 
 		try {
 			const decoded = jwt.verify(token, SECRET);
@@ -228,7 +232,7 @@ server.on("request", async (req, res) => {
 			res.writeHead(200, { "Content-Type": "application/json" });
 			return res.end(JSON.stringify({ approved }));
 		} catch {
-			res.writeHead(401);
+			res.writeHead(401, { "Content-Type": "application/json" });
 			return res.end(JSON.stringify({ approved: false }));
 		}
 	}
@@ -252,7 +256,7 @@ server.on("request", async (req, res) => {
 		return;
 	}
 
-	// ---------- VERIFY (FIXED SIGNATURE HANDLING) ----------
+	// ---------- VERIFY ----------
 	if (req.method === "POST" && url === "/auth/verify") {
 		let body = "";
 
