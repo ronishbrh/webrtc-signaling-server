@@ -294,74 +294,61 @@ server.on('request', async (req, res) => {
 	}
 
 	/* ------------ VERIFY SIGNATURE ------------ */
-
 	else if (req.method === "POST" && req.url === "/auth/verify") {
-
 		let body = "";
 
 		req.on("data", chunk => body += chunk);
 
-		req.on("end", () => {
-
-			const { publicKey, signature } = JSON.parse(body);
-
-			if (!approvedUsers.has(publicKey)) {
-				res.writeHead(403);
-				return res.end("User not approved");
-			}
-
-			const nonce = challenges.get(publicKey);
-
-			if (!nonce) {
-				res.writeHead(401);
-				return res.end("No challenge was given");
-			}
-
+		req.on("end", async () => {
 			try {
+				const { publicKey, signature } = JSON.parse(body);
 
-				// IMPORTANT: convert key properly
-				const keyObject = crypto.createPublicKey(publicKey);
+				if (!approvedUsers.has(publicKey)) {
+					res.writeHead(403);
+					return res.end("User not approved");
+				}
 
-				const verifier = crypto.createVerify("SHA256");
-				verifier.update(nonce);
-				verifier.end();
+				const nonce = challenges.get(publicKey);
 
-				const valid = verifier.verify(
-					keyObject,
-					signature,
-					"hex"
-				);
+				if (!nonce) {
+					res.writeHead(401);
+					return res.end("No challenge was given");
+				}
+
+				// IMPORTANT FIX: verify using WebCrypto-style key
+				const verify = crypto.createVerify("SHA256");
+				verify.update(nonce);
+				verify.end();
+
+				// publicKey must be PEM format
+				const valid = verify.verify(publicKey, Buffer.from(signature, "base64"));
 
 				if (!valid) {
 					res.writeHead(401);
 					return res.end("Invalid signature");
 				}
 
-				
-				challenges.delete(publicKey);
+				const token = jwt.sign(
+					{ user: publicKey },
+					SECRET,
+					{ expiresIn: "1h" }
+				);
 
-			} catch (error) {
-				console.error(error);
-				res.writeHead(401);
-				return res.end("Error while verifying signature");
+				if (publicKey === ADMIN_key) {
+					ADMIN_TOKEN = token;
+				}
+
+				res.writeHead(200, { "Content-Type": "application/json" });
+				res.end(JSON.stringify({
+					token,
+					isAdmin: publicKey === ADMIN_key
+				}));
+
+			} catch (err) {
+				console.error(err);
+				res.writeHead(500);
+				res.end("Error while creating token");
 			}
-
-			const token = jwt.sign(
-				{ user: publicKey },
-				SECRET,
-				{ expiresIn: "1h" }
-			);
-
-			res.writeHead(200, { "Content-Type": "application/json" });
-			res.end(JSON.stringify({
-				token,
-				isAdmin: publicKey === ADMIN_key
-			}));
-
-			if (publicKey === ADMIN_key) {
-				ADMIN_TOKEN = token;
-			}
-
 		});
 	}
 
