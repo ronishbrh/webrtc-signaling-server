@@ -141,7 +141,6 @@ server.on('request', async (req, res) => {
 			}
 		});
 	}
-
 	// REGISTER REQUEST
 	if (req.method === "POST" && req.url === "/register") {
 
