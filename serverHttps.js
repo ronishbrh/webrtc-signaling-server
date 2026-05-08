@@ -3,6 +3,9 @@ import http from "http";
 import https from "https";
 import { WebSocketServer } from "ws";
 
+import jwt from "jsonwebtoken";
+import crypto from "crypto";
+
 // ---------- CONFIGURATION ----------
 const PORT = process.env.PORT || 8080;
 const USE_SSL = process.env.USE_SSL === "true";
@@ -365,82 +368,83 @@ const wss = new WebSocketServer({ server, clientTracking: true });
 // ---------- CLIENT MANAGEMENT ----------
 const clients = {};
 
-wss.on("connection", (ws) => {
+wss.on("connection", (ws, req) => {
+
 	ws.isAlive = true;
 
-	ws.on("pong", () => {
-		ws.isAlive = true;
-	});
+	// ================= AUTH TOKEN =================
+	const url = new URL(req.url, `http://${req.headers.host}`);
+	const token = url.searchParams.get("token");
 
-	//const url = new URL("http://localhost:8080");
-	//const token = url.searchParams.get("token");
+	if (!token) {
+		ws.close(1008, "Token required");
+		return;
+	}
 
-	//if (!token) {
-	//	ws.close(1008, "Token required")
-	//	return;
-	//}
+	let payload;
 
-	//try {
-	//	const payload = jwt.verify(token, SECRET);
-	//	const userId = payload.user;
-	//	if (!approvedUsers.has(userId)) {
-	//		ws.close(1008, "Invalid or expired token");
-	//		return;
-	//	}
-	//} catch (err) {
-	//	ws.close(1008, "Invalid or expired token");
-	//	return;
-	//}
+	try {
+		payload = jwt.verify(token, SECRET);
+	} catch (err) {
+		ws.close(1008, "Invalid or expired token");
+		return;
+	}
+
+	const userId = payload.user;
+
+	if (!approvedUsers.has(userId)) {
+		ws.close(1008, "User not approved");
+		return;
+	}
 
 	let username = null;
 
 	ws.on("message", (msg) => {
 		let data;
+
 		try {
 			data = JSON.parse(msg);
 		} catch {
 			return;
 		}
 
+		// register identity
 		if (data.type === "register") {
-			username = data.userName;
+			username = userId; // bind token identity (IMPORTANT FIX)
 			if (clients[username]) clients[username].close();
 			clients[username] = ws;
-			console.log(`User registered: ${username}`);
+
+			console.log(`User connected: ${username}`);
 			return;
 		}
 
+		// forward signaling messages
 		const target = clients[data.to];
 		if (!target) return;
 
-		const types = [
+		const allowed = [
 			"call-request",
 			"call-accepted",
 			"call-declined",
 			"call-cancelled",
 			"join",
-			"challenge1",
-			"challenge2",
 			"offer",
 			"answer",
 			"ice",
-			"end-call",
+			"end-call"
 		];
 
-		if (types.includes(data.type)) {
+		if (allowed.includes(data.type)) {
 			target.send(JSON.stringify(data));
-			console.log(`Forwarded ${data.type} from ${data.from} to ${data.to}`);
 		}
 	});
 
 	ws.on("close", () => {
 		if (username && clients[username] === ws) {
 			delete clients[username];
-			console.log(`User disconnected: ${username}`);
 		}
 	});
 });
-
 // ---------- HEARTBEAT / PING ----------
 setInterval(() => {
 	wss.clients.forEach((ws) => {
