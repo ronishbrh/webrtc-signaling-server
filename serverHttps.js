@@ -351,7 +351,7 @@ const wss = new WebSocketServer({ server });
 
 const ALLOWED_RELAY_TYPES = new Set([
 	"call-request", "call-accepted", "call-declined", "call-cancelled",
-	"join", "challenge1", "challenge2", "offer", "answer", "ice", "end-call, callee-ready",
+	"join", "challenge1", "challenge2", "offer", "answer", "ice", "end-call",
 ]);
 
 wss.on("connection", (ws) => {
