@@ -317,7 +317,7 @@ wss.on("connection", (ws) => {
 		}
 
 		// ---------- SIGNAL ROUTING ----------
-		// data.to must now be the recipient's publicKey (not userName)
+
 		const allowedTypes = [
 			"call-request", "call-accepted", "call-declined", "call-cancelled",
 			"join", "challenge1", "challenge2", "offer", "answer", "ice", "end-call",
