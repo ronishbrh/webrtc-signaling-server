@@ -312,7 +312,7 @@ wss.on("connection", (ws) => {
 			if (clients[clientPublicKey]) clients[clientPublicKey].close();
 			clients[clientPublicKey] = ws;
 
-			console.log(`Client registered: ${clientPublicKey.slice(0, 20)}...`);
+			console.log(`Client registered: ${clientPublicKey.slice(-10)}...`);
 			return;
 		}
 
@@ -337,7 +337,7 @@ wss.on("connection", (ws) => {
 	ws.on("close", () => {
 		if (clientPublicKey && clients[clientPublicKey] === ws) {
 			delete clients[clientPublicKey];
-			console.log(`Client disconnected: ${clientPublicKey.slice(0, 20)}...`);
+			console.log(`Client disconnected: ${clientPublicKey.slice(-10)}...`);
 		}
 	});
 });
